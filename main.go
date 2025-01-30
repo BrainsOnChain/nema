@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/brainsonchain/nema/dbm"
 	"github.com/brainsonchain/nema/server"
@@ -51,11 +52,12 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// DBM
 	l.Info("Creating DBM")
 	db := dbm.NewManager()
+	nema := db.GetNema()
 
 	// -------------------------------------------------------------------------
 	// SERVER
 	l.Info("Creating server")
-	server := server.NewServer(l, db)
+	server := server.NewServer(l, db, nema)
 
 	// -------------------------------------------------------------------------
 	// ERROR CHANNEL
@@ -71,6 +73,7 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// -------------------------------------------------------------------------
 	// Run Nema
+	time.Sleep(10 * time.Millisecond)
 
 	// Prompt user if they want to run Nema
 	fmt.Println("Would you like to run Nema? (y/n)")
