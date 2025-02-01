@@ -1,20 +1,14 @@
 package main
 
 import (
-	"bufio"
 	"context"
 	"embed"
 	"fmt"
 	"log"
-	"os"
-	"strings"
-	"time"
 
-	"github.com/brainsonchain/nema/dbm"
 	"github.com/brainsonchain/nema/nema"
 	"github.com/brainsonchain/nema/server"
 	"github.com/joho/godotenv"
-	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/openai"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
@@ -24,14 +18,7 @@ import (
 var nemaPrompt embed.FS
 
 func main() {
-	// -------------------------------------------------------------------------
-	// ENV VARS
-	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
-	}
 
-	// -------------------------------------------------------------------------
-	// LOGGER
 	config := zap.NewDevelopmentConfig()
 	config.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
@@ -50,18 +37,62 @@ func main() {
 
 func run(ctx context.Context, l *zap.Logger) error {
 	// -------------------------------------------------------------------------
+	// ENV VARS
+	if err := godotenv.Load(); err != nil {
+		log.Fatal("Error loading .env file")
+	}
+	l.Info("ENV VARS loaded")
+
+	// -------------------------------------------------------------------------
 	// DBM
 	l.Info("Creating DBM")
-	db := dbm.NewManager()
-	nema := db.GetNema()
+
+	db, err := nema.NewDBManager("nema.db")
+	if err != nil {
+		return fmt.Errorf("error creating DBM: %w", err)
+	}
+	if err := db.Initiate(); err != nil {
+		return fmt.Errorf("error initiating DBM: %w", err)
+	}
+
+	// -------------------------------------------------------------------------
+	// Initial Prompt
+	l.Info("Reading initial prompt")
+
+	initialPromptBytes, err := nemaPrompt.ReadFile("nema_prompt.txt")
+	if err != nil {
+		return fmt.Errorf("error reading prompt file: %w", err)
+	}
+	initialPrompt := string(initialPromptBytes)
+
+	// -------------------------------------------------------------------------
+	// LLM
+	l.Info("Creating LLM")
+
+	llm, err := openai.New()
+	if err != nil {
+		return fmt.Errorf("error creating LLM: %w", err)
+	}
+
+	// -------------------------------------------------------------------------
+	// Nema
+	l.Info("Creating Nema Manager")
+
+	nemaManager, err := nema.NewManager(l, db, initialPrompt, llm)
+	if err != nil {
+		return fmt.Errorf("error creating Nema Manager: %w", err)
+	}
 
 	// -------------------------------------------------------------------------
 	// SERVER
 	l.Info("Creating server")
-	server := server.NewServer(l, db, nema)
+
+	server := server.NewServer(l, nemaManager)
 
 	// -------------------------------------------------------------------------
 	// ERROR CHANNEL
+	l.Info("Creating error channel")
+
 	errChan := make(chan error)
 
 	// Run the server on port 8080
@@ -72,95 +103,6 @@ func run(ctx context.Context, l *zap.Logger) error {
 		}
 	}()
 
-	// -------------------------------------------------------------------------
-	// Run Nema
-	time.Sleep(10 * time.Millisecond)
-
-	// Prompt user if they want to run Nema
-	fmt.Println("Would you like to run Nema? (y/n)")
-	reader := bufio.NewReader(os.Stdin)
-	response, err := reader.ReadString('\n')
-	if err != nil {
-		return fmt.Errorf("error reading input: %w", err)
-	}
-	response = strings.TrimSpace(response)
-	if response != "y" {
-		l.Info("Nema not run")
-	} else {
-		l.Info("Running Nema")
-		runNema(ctx, nema)
-	}
-
 	// Wait for any server errors
 	return <-errChan
-}
-
-func runNema(ctx context.Context, nema nema.Neuro) error {
-	// Read the embedded prompt file
-	promptBytes, err := nemaPrompt.ReadFile("nema_prompt.txt")
-	if err != nil {
-		return fmt.Errorf("error reading prompt file: %w", err)
-	}
-	initialPrompt := string(promptBytes)
-
-	// Replace the %s with the initial neuron states
-	initialPrompt = strings.Replace(initialPrompt, "%s", nema.JSONString(), 1)
-	fmt.Println(initialPrompt)
-	return nil
-
-	messages := []llms.MessageContent{
-		llms.TextParts(llms.ChatMessageTypeHuman, initialPrompt),
-		llms.TextParts(llms.ChatMessageTypeHuman, "What would you like to do?"),
-	}
-
-	llm, err := openai.New()
-	if err != nil {
-		return fmt.Errorf("error creating LLM: %w", err)
-	}
-
-	// Get initial response
-	completion, err := llm.GenerateContent(ctx, messages, llms.WithTemperature(1))
-	if err != nil {
-		return fmt.Errorf("error generating completion: %w", err)
-	}
-
-	fmt.Println("\n🤖 Assistant:", completion.Choices[0].Content)
-
-	// Start interactive loop
-	reader := bufio.NewReader(os.Stdin)
-	for {
-		fmt.Print("\n👤 You: ")
-		input, err := reader.ReadString('\n')
-		if err != nil {
-			return fmt.Errorf("error reading input: %w", err)
-		}
-
-		// Trim whitespace and check for exit command
-		input = strings.TrimSpace(input)
-		if input == "exit" || input == "quit" {
-			fmt.Println("Goodbye! 👋")
-			return nil
-		}
-
-		messages = append(messages, llms.TextParts(llms.ChatMessageTypeHuman, input))
-
-		fmt.Println("message length: ", len(messages))
-
-		fmt.Print("\n🪱 Nema: ")
-		completion, err := llm.GenerateContent(
-			ctx,
-			messages,
-			llms.WithStreamingFunc(func(ctx context.Context, chunk []byte) error {
-				fmt.Print(string(chunk))
-				return nil
-			}),
-			llms.WithTemperature(1),
-		)
-		if err != nil {
-			return fmt.Errorf("error streaming completion: %w", err)
-		}
-
-		content := completion.Choices[0].Content
-		messages = append(messages, llms.TextParts(llms.ChatMessageTypeAI, content))
-	}
 }

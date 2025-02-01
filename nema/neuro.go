@@ -5,15 +5,15 @@ import (
 	"time"
 )
 
-type Neuro struct {
+type neuro struct {
 	StateCount     int            `json:"state_count"`
 	UpdatedAt      time.Time      `json:"updated_at"`
 	MotorNeurons   map[string]int `json:"motor_neurons"`
 	SensoryNeurons map[string]int `json:"sensory_neurons"`
 }
 
-func NewNeuro() Neuro {
-	return Neuro{
+func NewNeuro() neuro {
+	return neuro{
 		StateCount:     0,
 		UpdatedAt:      time.Now(),
 		MotorNeurons:   initialMotorNeuronStates,
@@ -21,14 +21,14 @@ func NewNeuro() Neuro {
 	}
 }
 
-func (n *Neuro) updateMotorNeuron(neuron string, state int) {
+func (n *neuro) updateMotorNeuron(neuron string, state int) {
 	if !validValue(state) {
 		return
 	}
 	n.MotorNeurons[neuron] = state
 }
 
-func (n *Neuro) updateSensoryNeuron(neuron string, state int) {
+func (n *neuro) updateSensoryNeuron(neuron string, state int) {
 	if !validValue(state) {
 		return
 	}
@@ -41,7 +41,7 @@ func validValue(value int) bool {
 
 // JSONString returns the Neuro object as a pretty JSON string with indents and
 // newlines.
-func (n *Neuro) JSONString() string {
+func (n *neuro) JSONString() string {
 	json, err := json.MarshalIndent(n, "", "  ")
 	if err != nil {
 		return ""
