@@ -5,13 +5,17 @@ import (
 	"embed"
 	"fmt"
 	"log"
+	"os"
 
-	"github.com/brainsonchain/nema/nema"
-	"github.com/brainsonchain/nema/server"
 	"github.com/joho/godotenv"
+	"github.com/tmc/langchaingo/llms"
+	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
+
+	"github.com/brainsonchain/nema/nema"
+	"github.com/brainsonchain/nema/server"
 )
 
 //go:embed nema_prompt.txt
@@ -69,9 +73,25 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// LLM
 	l.Info("Creating LLM")
 
-	llm, err := openai.New()
-	if err != nil {
-		return fmt.Errorf("error creating LLM: %w", err)
+	// Check the MODEL_PROVIDER env var. If ollama is set, use the ollama client
+	// to create the LLM. Otherwise, use the openai client.
+	var llm llms.Model
+	modelProvider := os.Getenv("MODEL_PROVIDER")
+	if modelProvider == "ollama" {
+		l.Info("Creating ollama client")
+		ollama, err := ollama.New(
+			ollama.WithModel(os.Getenv("OLLAMA_MODEL")),
+		)
+		if err != nil {
+			return fmt.Errorf("error creating ollama client: %w", err)
+		}
+		llm = ollama
+	} else {
+		l.Info("Creating openai client")
+		llm, err = openai.New()
+		if err != nil {
+			return fmt.Errorf("error creating LLM: %w", err)
+		}
 	}
 
 	// -------------------------------------------------------------------------

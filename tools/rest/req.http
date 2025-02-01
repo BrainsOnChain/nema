@@ -15,6 +15,6 @@ POST {{BASE_URL}}/nema/prompt HTTP/1.1
 Content-Type: application/json
 
 {
-	"prompt": "How are you?"
+	"prompt": "There is a light shining on you"
 }
 

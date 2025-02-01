@@ -56,9 +56,16 @@ func (m *dbm) Initiate() error {
 	return nil
 }
 
-// SaveState saves the neural state to the database. It returns the ID of the
+// saveState saves the neural state to the database. It returns the ID of the
 // state.
-func (m *dbm) SaveState(n neuro) (int, error) {
+func (m *dbm) saveState(n neuro) (int, error) {
+	q := /* sql */ `
+		INSERT INTO neural_states
+			(state_count, updated_at, motor_neurons, sensory_neurons)
+		VALUES (?, ?, ?, ?)
+		RETURNING id
+	`
+
 	// Marshal the neuron maps to JSON strings
 	motorJSON, err := json.Marshal(n.MotorNeurons)
 	if err != nil {
@@ -69,13 +76,6 @@ func (m *dbm) SaveState(n neuro) (int, error) {
 		return 0, fmt.Errorf("failed to marshal sensory neurons: %w", err)
 	}
 
-	q := /* sql */ `
-		INSERT INTO neural_states
-			(state_count, updated_at, motor_neurons, sensory_neurons)
-		VALUES (?, ?, ?, ?)
-		RETURNING id
-	`
-
 	var id int
 	if err := m.db.QueryRow(q, n.StateCount, n.UpdatedAt, string(motorJSON), string(sensoryJSON)).Scan(&id); err != nil {
 		return 0, fmt.Errorf("failed to save nema: %w", err)
@@ -84,15 +84,20 @@ func (m *dbm) SaveState(n neuro) (int, error) {
 	return id, nil
 }
 
-// SavePrompt saves the prompt to the database
-func (m *dbm) SavePrompt(stateID int, prompt string, response string) error {
+// savePrompt saves the prompt to the database
+func (m *dbm) savePrompt(stateID int, prompt string, response llmResponse) error {
 	q := /* sql */ `
 		INSERT INTO prompts
 			(neural_state_id, question, response, completed_at)
 		VALUES (?, ?, ?, ?)
 	`
 
-	if _, err := m.db.Exec(q, stateID, prompt, response, time.Now()); err != nil {
+	responseJSON, err := json.Marshal(response)
+	if err != nil {
+		return fmt.Errorf("failed to marshal response: %w", err)
+	}
+
+	if _, err := m.db.Exec(q, stateID, prompt, string(responseJSON), time.Now()); err != nil {
 		return fmt.Errorf("failed to save prompt: %w", err)
 	}
 
@@ -101,8 +106,8 @@ func (m *dbm) SavePrompt(stateID int, prompt string, response string) error {
 
 var errNoState = errors.New("no state found")
 
-// GetState gets the neural state from the database
-func (m *dbm) GetState() (neuro, error) {
+// getState gets the neural state from the database
+func (m *dbm) getState() (neuro, error) {
 	q := /* sql */ `
 		SELECT state_count, updated_at, motor_neurons, sensory_neurons
 		FROM neural_states
