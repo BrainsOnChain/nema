@@ -14,6 +14,7 @@ import (
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 
+	"github.com/brainsonchain/nema/mock"
 	"github.com/brainsonchain/nema/nema"
 	"github.com/brainsonchain/nema/server"
 )
@@ -28,14 +29,14 @@ func main() {
 	config.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
 	logger, err := config.Build()
 	if err != nil {
-		log.Fatal("Error creating logger")
+		log.Fatal("error creating logger")
 	}
 	defer logger.Sync()
-	logger.Info("Logger created")
+	logger.Info("logger created")
 
 	ctx := context.Background()
 	if err := run(ctx, logger); err != nil {
-		logger.Error("Error running", zap.Error(err))
+		logger.Error("error running", zap.Error(err))
 	}
 }
 
@@ -43,13 +44,13 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// -------------------------------------------------------------------------
 	// ENV VARS
 	if err := godotenv.Load(); err != nil {
-		log.Fatal("Error loading .env file")
+		log.Fatal("error loading .env file")
 	}
-	l.Info("ENV VARS loaded")
+	l.Info("env vars loaded")
 
 	// -------------------------------------------------------------------------
 	// DBM
-	l.Info("Creating DBM")
+	l.Info("creating dbm")
 
 	db, err := nema.NewDBManager("nema.db")
 	if err != nil {
@@ -61,7 +62,7 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// -------------------------------------------------------------------------
 	// Initial Prompt
-	l.Info("Reading initial prompt")
+	l.Info("reading initial prompt")
 
 	initialPromptBytes, err := nemaPrompt.ReadFile("nema_prompt.txt")
 	if err != nil {
@@ -71,32 +72,33 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// -------------------------------------------------------------------------
 	// LLM
-	l.Info("Creating LLM")
+	l.Info("creating llm")
 
 	// Check the MODEL_PROVIDER env var. If ollama is set, use the ollama client
 	// to create the LLM. Otherwise, use the openai client.
 	var llm llms.Model
-	modelProvider := os.Getenv("MODEL_PROVIDER")
-	if modelProvider == "ollama" {
-		l.Info("Creating ollama client")
-		ollama, err := ollama.New(
-			ollama.WithModel(os.Getenv("OLLAMA_MODEL")),
-		)
+
+	switch os.Getenv("MODEL_PROVIDER") {
+	case "ollama":
+		l.Info("creating ollama client")
+		llm, err = ollama.New(ollama.WithModel(os.Getenv("OLLAMA_MODEL")))
 		if err != nil {
 			return fmt.Errorf("error creating ollama client: %w", err)
 		}
-		llm = ollama
-	} else {
-		l.Info("Creating openai client")
+	case "openai":
+		l.Info("creating openai client")
 		llm, err = openai.New()
 		if err != nil {
 			return fmt.Errorf("error creating LLM: %w", err)
 		}
+	default:
+		l.Info("creating mock llm")
+		llm = &mock.MockLLM{}
 	}
 
 	// -------------------------------------------------------------------------
 	// Nema
-	l.Info("Creating Nema Manager")
+	l.Info("creating nema manager")
 
 	nemaManager, err := nema.NewManager(l, db, initialPrompt, llm)
 	if err != nil {
@@ -105,19 +107,19 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// -------------------------------------------------------------------------
 	// SERVER
-	l.Info("Creating server")
+	l.Info("creating server")
 
 	server := server.NewServer(l, nemaManager)
 
 	// -------------------------------------------------------------------------
 	// ERROR CHANNEL
-	l.Info("Creating error channel")
+	l.Info("creating error channel")
 
 	errChan := make(chan error)
 
 	// Run the server on port 8080
 	go func() {
-		l.Info("Starting server on port 8080")
+		l.Info("starting server on port 8080")
 		if err := server.Start(ctx, "8080"); err != nil {
 			errChan <- fmt.Errorf("server error: %w", err)
 		}

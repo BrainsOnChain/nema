@@ -1,3 +1,6 @@
+# This tool uses the VSCode REST Client extension.
+# https://marketplace.visualstudio.com/items?itemName=humao.rest-client
+
 @BASE_URL = http://localhost:8080
 
 
@@ -11,10 +14,11 @@ GET {{BASE_URL}}/nema/state HTTP/1.1
 ###
 
 # @name Prompt
+# @prompt prompt
 POST {{BASE_URL}}/nema/prompt HTTP/1.1
 Content-Type: application/json
 
 {
-	"prompt": "There is a light shining on you"
+	"prompt": "{{prompt}}"
 }
 

@@ -26,10 +26,10 @@ func NewManager(log *zap.Logger, dbm *dbm, initialPrompt string, llm llms.Model)
 	nemaState, err := dbm.getState()
 	if err != nil {
 		if errors.Is(err, errNoState) {
-			log.Info("No state found, creating new Nema")
+			log.Info("no state found, creating new nema")
 			nemaState = NewNeuro()
 		} else {
-			return nil, fmt.Errorf("error getting Nema: %w", err)
+			return nil, fmt.Errorf("error getting nema: %w", err)
 		}
 	}
 
@@ -54,12 +54,12 @@ func (m *Manager) GetState() neuro {
 	return m.state
 }
 
-func (m *Manager) AskLLM(ctx context.Context, prompt string) (string, error) {
+func (m *Manager) AskLLM(ctx context.Context, prompt string) (llmResponse, error) {
 	m.messages = append(m.messages, llms.TextParts(llms.ChatMessageTypeHuman, prompt))
 
 	completion, err := m.llm.GenerateContent(ctx, m.messages, llms.WithTemperature(1))
 	if err != nil {
-		return "", fmt.Errorf("error generating completion: %w", err)
+		return llmResponse{}, fmt.Errorf("error generating completion: %w", err)
 	}
 
 	response := completion.Choices[0].Content
@@ -69,18 +69,16 @@ func (m *Manager) AskLLM(ctx context.Context, prompt string) (string, error) {
 	response = strings.TrimPrefix(response, "```json\n")
 	response = strings.TrimSuffix(response, "\n```")
 
-	m.log.Info("Response", zap.String("response", response))
-
 	m.messages = append(m.messages, llms.TextParts(llms.ChatMessageTypeAI, response))
 
 	var lr llmResponse
 	if err = json.Unmarshal([]byte(response), &lr); err != nil {
-		return "", fmt.Errorf("error unmarshalling response: %w", err)
+		return llmResponse{}, fmt.Errorf("error unmarshalling response: %w", err)
 	}
 
 	// Update the neurons if the response indicates that they have changed
 	if lr.Changed {
-		m.log.Info("Neurons changed, updating state")
+		m.log.Info("neurons changed, updating state")
 		for _, neuron := range lr.MotorNeurons {
 			m.state.updateMotorNeuron(neuron.Neuron, neuron.Value)
 		}
@@ -91,18 +89,20 @@ func (m *Manager) AskLLM(ctx context.Context, prompt string) (string, error) {
 		// Update the state
 		id, err := m.db.saveState(m.state)
 		if err != nil {
-			return "", fmt.Errorf("error updating state: %w", err)
+			return llmResponse{}, fmt.Errorf("error updating state: %w", err)
 		}
 
 		// Save the prompt and response
 		if err := m.db.savePrompt(id, prompt, lr); err != nil {
-			return "", fmt.Errorf("error saving prompt: %w", err)
+			return llmResponse{}, fmt.Errorf("error saving prompt: %w", err)
 		}
 	} else {
-		m.log.Info("No neurons changed, skipping update")
+		m.log.Info("no neurons changed, skipping update")
 	}
 
-	return response, nil
+	m.log.Info("response", zap.Any("response", lr))
+
+	return lr, nil
 }
 
 type llmResponse struct {
