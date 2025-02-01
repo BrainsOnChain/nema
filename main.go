@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/brainsonchain/nema/dbm"
+	"github.com/brainsonchain/nema/nema"
 	"github.com/brainsonchain/nema/server"
 	"github.com/joho/godotenv"
 	"github.com/tmc/langchaingo/llms"
@@ -87,20 +88,25 @@ func run(ctx context.Context, l *zap.Logger) error {
 		l.Info("Nema not run")
 	} else {
 		l.Info("Running Nema")
-		runNema(ctx)
+		runNema(ctx, nema)
 	}
 
 	// Wait for any server errors
 	return <-errChan
 }
 
-func runNema(ctx context.Context) error {
+func runNema(ctx context.Context, nema nema.Neuro) error {
 	// Read the embedded prompt file
 	promptBytes, err := nemaPrompt.ReadFile("nema_prompt.txt")
 	if err != nil {
 		return fmt.Errorf("error reading prompt file: %w", err)
 	}
 	initialPrompt := string(promptBytes)
+
+	// Replace the %s with the initial neuron states
+	initialPrompt = strings.Replace(initialPrompt, "%s", nema.JSONString(), 1)
+	fmt.Println(initialPrompt)
+	return nil
 
 	messages := []llms.MessageContent{
 		llms.TextParts(llms.ChatMessageTypeHuman, initialPrompt),

@@ -1,6 +1,9 @@
 package nema
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 type Neuro struct {
 	StateCount     int            `json:"state_count"`
@@ -34,6 +37,16 @@ func (n *Neuro) updateSensoryNeuron(neuron string, state int) {
 
 func validValue(value int) bool {
 	return value > -129 && value < 128
+}
+
+// JSONString returns the Neuro object as a pretty JSON string with indents and
+// newlines.
+func (n *Neuro) JSONString() string {
+	json, err := json.MarshalIndent(n, "", "  ")
+	if err != nil {
+		return ""
+	}
+	return string(json)
 }
 
 var initialMotorNeuronStates = map[string]int{
