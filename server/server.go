@@ -66,13 +66,23 @@ func (s *Server) nemaPrompt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.log.Info("incoming prompt", zap.String("prompt", prompt.Prompt))
+
 	response, err := s.nemaManager.AskLLM(r.Context(), prompt.Prompt)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	if err := json.NewEncoder(w).Encode(response); err != nil {
+	type resp struct {
+		HumanMessage string `json:"human_message"`
+	}
+
+	jsonResp := resp{
+		HumanMessage: response.HumanMessage,
+	}
+
+	if err := json.NewEncoder(w).Encode(jsonResp); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 	}
 
