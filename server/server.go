@@ -2,9 +2,9 @@ package server
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -13,84 +13,78 @@ import (
 	"github.com/brainsonchain/nema/nema"
 )
 
-// Server is the main server that implement a Chi router and handles HTTP
-// requests.
+// Server implements both public and private HTTP routers
 type Server struct {
-	log         *zap.Logger
-	router      *chi.Mux
-	nemaManager *nema.Manager
+	log           *zap.Logger
+	publicRouter  *chi.Mux
+	privateRouter *chi.Mux
+	nemaManager   *nema.Manager
 }
 
 func NewServer(log *zap.Logger, nemaManager *nema.Manager) *Server {
-	router := chi.NewRouter()
-
-	s := &Server{
-		log:         log,
-		nemaManager: nemaManager,
-		router:      router,
+	setupRouter := func() *chi.Mux {
+		router := chi.NewRouter()
+		router.Use(middleware.Logger)
+		router.Use(middleware.Recoverer)
+		return router
 	}
 
-	// Set middleware
-	router.Use(middleware.Logger)
-	router.Use(middleware.Recoverer)
+	publicRouter := setupRouter()
+	privateRouter := setupRouter()
 
-	// Health check
-	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+	s := &Server{
+		log:           log,
+		nemaManager:   nemaManager,
+		publicRouter:  publicRouter,
+		privateRouter: privateRouter,
+	}
+
+	// -------------------------------------------------------------------------
+	// Public routes
+	publicRouter.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
+	publicRouter.Get("/nema/state", s.nemaState)
+	// publicRouter.Post("/nema/prompt", s.nemaPrompt)
 
-	router.Get("/nema/state", s.nemaState)
-	router.Post("/nema/prompt", s.nemaPrompt)
+	// -------------------------------------------------------------------------
+	// Private routes (prefixed with /internal)
+	privateRouter.Route("/internal", func(r chi.Router) {
+		r.Post("/tweet", s.tweet)
+		r.Post("/tweet/reply", s.tweetReply)
+	})
 
 	return s
 }
 
-func (s *Server) Start(ctx context.Context, port string) error {
-	return http.ListenAndServe(fmt.Sprintf(":%s", port), s.router)
-}
+// Start launches both the public and private servers
+func (s *Server) Start(ctx context.Context, publicPort, privatePort string) error {
+	var wg sync.WaitGroup
+	errChan := make(chan error, 2)
 
-// nemaState is a handler that returns the current state of the nema.
-func (s *Server) nemaState(w http.ResponseWriter, r *http.Request) {
-	if err := json.NewEncoder(w).Encode(s.nemaManager.GetState()); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+	// Start public server
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := http.ListenAndServe(fmt.Sprintf(":%s", publicPort), s.publicRouter); err != nil {
+			errChan <- fmt.Errorf("public server error: %w", err)
+		}
+	}()
+
+	// Start private server
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := http.ListenAndServe(fmt.Sprintf("fly-local-6pn:%s", privatePort), s.privateRouter); err != nil {
+			errChan <- fmt.Errorf("private server error: %w", err)
+		}
+	}()
+
+	// Wait for context cancellation or server error
+	select {
+	case err := <-errChan:
+		return err
+	case <-ctx.Done():
+		return ctx.Err()
 	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-}
-
-// nemaPrompt is a handler that takes a incoming prompt, asks the LLM, and
-// returns the response.
-func (s *Server) nemaPrompt(w http.ResponseWriter, r *http.Request) {
-	// Read the request body
-	var prompt struct {
-		Prompt string `json:"prompt"`
-	}
-	if err := json.NewDecoder(r.Body).Decode(&prompt); err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
-		return
-	}
-
-	s.log.Info("incoming prompt", zap.String("prompt", prompt.Prompt))
-
-	response, err := s.nemaManager.AskLLM(r.Context(), prompt.Prompt)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-
-	type resp struct {
-		HumanMessage string `json:"human_message"`
-	}
-
-	jsonResp := resp{
-		HumanMessage: response.HumanMessage,
-	}
-
-	if err := json.NewEncoder(w).Encode(jsonResp); err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
 }

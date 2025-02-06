@@ -123,7 +123,7 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// SERVER
 	l.Info("creating server")
 
-	server := server.NewServer(l, nemaManager)
+	srv := server.NewServer(l, nemaManager)
 
 	// -------------------------------------------------------------------------
 	// ERROR CHANNEL
@@ -134,7 +134,7 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// Run the server on port 8080
 	go func() {
 		l.Info("starting server on port 8080")
-		if err := server.Start(ctx, "8080"); err != nil {
+		if err := srv.Start(ctx, "8080", "8081"); err != nil {
 			errChan <- fmt.Errorf("server error: %w", err)
 		}
 	}()

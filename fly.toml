@@ -6,8 +6,6 @@
 app = 'nema'
 primary_region = 'ewr'
 
-[build]
-
 [http_service]
   auto_start_machines = true
   auto_stop_machines = 'stop'
@@ -21,8 +19,6 @@ primary_region = 'ewr'
     hard_limit = 20
     soft_limit = 10
     type = "requests"
-
-[[services]]
 
 [[vm]]
   cpu_kind = 'shared'
