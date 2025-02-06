@@ -131,12 +131,17 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// Run the server on port 8080
 	go func() {
-		l.Info("starting server on port 8080")
+		l.Info("starting servers on port 8080 and 8081")
 		if err := srv.Start(ctx, "8080", "8081"); err != nil {
 			errChan <- fmt.Errorf("server error: %w", err)
 		}
 	}()
 
 	// Wait for any server errors
-	return <-errChan
+	if err := <-errChan; err != nil {
+		l.Error("server error", zap.Error(err))
+		return err
+	}
+
+	return nil
 }

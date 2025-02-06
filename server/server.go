@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"sync"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -59,22 +58,17 @@ func NewServer(log *zap.Logger, nemaManager *nema.Manager) *Server {
 
 // Start launches both the public and private servers
 func (s *Server) Start(ctx context.Context, publicPort, privatePort string) error {
-	var wg sync.WaitGroup
 	errChan := make(chan error, 2)
 
 	// Start public server
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		if err := http.ListenAndServe(fmt.Sprintf(":%s", publicPort), s.publicRouter); err != nil {
 			errChan <- fmt.Errorf("public server error: %w", err)
 		}
 	}()
 
 	// Start private server
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		if err := http.ListenAndServe(fmt.Sprintf("fly-local-6pn:%s", privatePort), s.privateRouter); err != nil {
 			errChan <- fmt.Errorf("private server error: %w", err)
 		}
