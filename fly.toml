@@ -1,0 +1,49 @@
+# fly.toml app configuration file generated for nema on 2025-02-06T15:25:12-04:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'nema'
+primary_region = 'ewr'
+
+[http_service]
+auto_start_machines = true
+auto_stop_machines = 'stop'
+force_https = true
+internal_port = 8080
+min_machines_running = 1
+processes = [
+  'app',
+]
+  [http_service.concurrency]
+  hard_limit = 20
+  soft_limit = 10
+  type = "requests"
+
+[[vm]]
+cpu_kind = 'shared'
+cpus = 1
+memory = '256mb'
+size = 'shared-cpu-1x'
+
+[checks]
+  [checks.healthz]
+  grace_period = "30s"
+  interval = "15s"
+  method = "get"
+  path = "/healthz"
+  port = 8080
+  timeout = "10s"
+  type = "http"
+
+  # [metrics]
+  #   path = "/metrics" # default for most prometheus exporters
+  #   port = 9091
+
+[mounts]
+destination = "/data"
+source = "db_data"
+
+[env]
+# Database
+DB_PATH = "/data/nema.db"

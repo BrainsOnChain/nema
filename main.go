@@ -48,11 +48,23 @@ func run(ctx context.Context, l *zap.Logger) error {
 	}
 	l.Info("env vars loaded")
 
+	// // -------------------------------------------------------------------------
+	// // Prometheus Metrics
+	// l.Info("initializing prometheus metrics")
+
+	// http.Handle("/metrics", promhttp.Handler())
+	// go http.ListenAndServe(":9091", nil)
+
 	// -------------------------------------------------------------------------
 	// DBM
 	l.Info("creating dbm")
 
-	db, err := nema.NewDBManager("nema.db")
+	dbPath := os.Getenv("DB_PATH")
+	if dbPath == "" {
+		dbPath = "nema.db"
+	}
+
+	db, err := nema.NewDBManager(dbPath)
 	if err != nil {
 		return fmt.Errorf("error creating DBM: %w", err)
 	}
@@ -109,7 +121,7 @@ func run(ctx context.Context, l *zap.Logger) error {
 	// SERVER
 	l.Info("creating server")
 
-	server := server.NewServer(l, nemaManager)
+	srv := server.NewServer(l, nemaManager)
 
 	// -------------------------------------------------------------------------
 	// ERROR CHANNEL
@@ -119,12 +131,17 @@ func run(ctx context.Context, l *zap.Logger) error {
 
 	// Run the server on port 8080
 	go func() {
-		l.Info("starting server on port 8080")
-		if err := server.Start(ctx, "8080"); err != nil {
+		l.Info("starting servers on port 8080 and 8081")
+		if err := srv.Start(ctx, "8080", "8081"); err != nil {
 			errChan <- fmt.Errorf("server error: %w", err)
 		}
 	}()
 
 	// Wait for any server errors
-	return <-errChan
+	if err := <-errChan; err != nil {
+		l.Error("server error", zap.Error(err))
+		return err
+	}
+
+	return nil
 }
