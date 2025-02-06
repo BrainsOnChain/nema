@@ -5,11 +5,9 @@ import (
 	"embed"
 	"fmt"
 	"log"
-	"net/http"
 	"os"
 
 	"github.com/joho/godotenv"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/tmc/langchaingo/llms"
 	"github.com/tmc/langchaingo/llms/ollama"
 	"github.com/tmc/langchaingo/llms/openai"
@@ -50,12 +48,12 @@ func run(ctx context.Context, l *zap.Logger) error {
 	}
 	l.Info("env vars loaded")
 
-	// -------------------------------------------------------------------------
-	// Prometheus Metrics
-	l.Info("initializing prometheus metrics")
+	// // -------------------------------------------------------------------------
+	// // Prometheus Metrics
+	// l.Info("initializing prometheus metrics")
 
-	http.Handle("/metrics", promhttp.Handler())
-	go http.ListenAndServe(":9091", nil)
+	// http.Handle("/metrics", promhttp.Handler())
+	// go http.ListenAndServe(":9091", nil)
 
 	// -------------------------------------------------------------------------
 	// DBM
