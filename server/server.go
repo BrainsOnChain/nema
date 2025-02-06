@@ -34,6 +34,11 @@ func NewServer(log *zap.Logger, nemaManager *nema.Manager) *Server {
 	router.Use(middleware.Logger)
 	router.Use(middleware.Recoverer)
 
+	// Health check
+	router.Get("/healthz", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
 	router.Get("/nema/state", s.nemaState)
 	router.Post("/nema/prompt", s.nemaPrompt)
 
