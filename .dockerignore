@@ -1,0 +1,7 @@
+# flyctl launch added from .gitignore
+**/.vscode
+**/.DS_Store
+
+# SQLite DB
+**/nema.db
+
